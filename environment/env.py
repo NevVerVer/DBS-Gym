@@ -1,8 +1,7 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Optional
-from typing import Union
+from typing import Optional, Union
 from copy import deepcopy
 
 import gymnasium as gym
@@ -15,7 +14,8 @@ from environment.utils import (
     remove_negative_w0, apply_locus_mask,
     create_distance_matrix, wavelet_kernel_matrix,
     units2sec, sec2units, create_directed_stim_masks)
-from environment.env_configs.env1 import stim_rec_locus_coordinates  # List is the same for all 3 version of env
+# List is the same for all 3 version of env
+from environment.env_configs.env1 import stim_rec_locus_coordinates  
 
 
 def generate_perturbations(
@@ -74,11 +74,13 @@ class SimpleDBS:
                  naive=False,
                  logger=None):
         """
-        :param width: Width of the square wave pulse.
-        :param pause: Duration of the pause between consecutive pulses.
-        :param start_time: Time at which the first pulse should begin.
-        :param amplitude: Amplitude of the pulse, default is 1.
-        :param naive: wether or not scale dbs amplitude w.r.t. distance to neuron 
+        Class for Deep Brain Stimulation electrode. The shape of the wave is set in Gym class.
+        Can set multiple stimulation and recording contacts. Has directional stimulation
+        option - for that the gym class observation can be changed to also adjust direction of stimulation. 
+
+        :start_time: Time at which the first pulse should begin.
+        :amplitude: Amplitude of the pulse, default is 1.
+        :naive: wether or not scale dbs amplitude w.r.t. distance to neuron 
         """
         self.amplitudes = amplitudes
         self.prc_scaling = prc_scaling
@@ -142,7 +144,7 @@ class SimpleDBS:
         self.rec_conductances = []
         for rec_idx in self.rec_idxs:
             dist_vector = distance_matrix[rec_idx]
-            conductance = 1 - dist_vector                   # TODO: ???
+            conductance = 1 - dist_vector
             conductance = np.where(conductance < 0.0, 0, conductance)
             if naive:
                 if logger:
@@ -183,6 +185,7 @@ class SimpleDBS:
 
 class KuramotoJAX:
     """
+    Class of the Kuramoto model implemented in jax. 
     Only positive values are okay for w0
     """
     def __init__(self, 
@@ -225,7 +228,7 @@ class KuramotoJAX:
         else:
             raise ValueError(f'Wrong distance matrix type: {self.distance_matrix}')
            
-        # Electrode contact
+        # Initialize electrode
         electrode_distances = self.neur_grid * conduct_modifier
         self.dbs = SimpleDBS(grid_size,
                              distance_matrix=create_distance_matrix(electrode_distances),
@@ -240,7 +243,7 @@ class KuramotoJAX:
                              logger=logger)
         self.pulse = np.zeros((self.n_neurons))
 
-        # Define all needed for integration
+        # Define all needed for differential eq. solver
         self.ode_term = ODETerm(self.dynamics)
         self.solver = Dopri5()
         self.stepsize_controller = PIDController(rtol=1e-5, atol=1e-5)
@@ -273,9 +276,7 @@ class SpatialKuramoto(gym.Env):
     
   def __init__(self, params_dict, save_init=False):
     """ 
-    Init function:
-    sigmoid: Function that we observe instead of original one: Bool
-    len_state: shape of state that agent observes [250, 1]: integer
+    Class for environment for RL aDBS training.
 
     len: in [units] - pseudo-seconds
     sec: in [seconds] - need for stats
@@ -288,13 +289,12 @@ class SpatialKuramoto(gym.Env):
     self.reset_count = -1
     self.verbose = params_dict['verbose']
     np.random.seed(self.params_dict['rand_seed'])
-    # self.random_seeds = [[0, self.params_dict['rand_seed']], ]
 
     # period == step
-    self.step_len = self.params_dict['electrode_width'] + self.params_dict['electrode_pause']   # units + units = units
+    self.step_len = self.params_dict['electrode_width'] + self.params_dict['electrode_pause']  # units + units = units
 
-    self.observe_wind_len = self.step_len * self.params_dict['observe_wind_counts'] # units * counts = units
-    self.observe_wind_idxs = int(self.observe_wind_len / self.params_dict['verbose_dt'])     # [counts]
+    self.observe_wind_len = self.step_len * self.params_dict['observe_wind_counts']  # units * counts = units
+    self.observe_wind_idxs = int(self.observe_wind_len / self.params_dict['verbose_dt'])   # [counts]
 
     self.total_episode_len = self.params_dict['total_episode_len']    # [units]
     self.total_episode_counts = int(self.total_episode_len / self.step_len)  # counts
@@ -344,43 +344,41 @@ class SpatialKuramoto(gym.Env):
 
     self.elec_coords = params_dict['elec_coords']
     self.rec_coords = params_dict['rec_coords']
-
-    # Temporal parameters
+    
     self.save_events = params_dict['save_events']
     self.encapsulation_coeff = params_dict['conduct_modifier']
 
+    ### Temporal drift parameters (For env2)
     if params_dict['temporal_drift']:
-        self.random_freq_update = params_dict['random_freq_update']
+        self.random_freq_update = params_dict['random_freq_update']  # Turn on for training
 
         if self.save_events:  # For logging times of events for evaluation
             self.temporal_events = {'electrode_drift': [],
                                     'encapsulation_drift': [],
                                     'plasticity_drift': [],
                                     'mov_modulation_drift': []}  
-        # TODO asseertion that plasticity freq more or equal than 2
+        # Electrode drift parameters
         self.elec_drift_episode = params_dict['electrode_drift_freq']
-
         self.elec_encaps_episode = params_dict['encapsulation_drift_freq']
         self.encaps_precent = params_dict['encapsulation_percent']
-        self.mov_mod_episode = params_dict['mov_modulation_drift_freq']  # TODO
-        
-        # ================================================================
-        self.plasticity_episode = params_dict['plasticity_drift_freq']
-        self.plasticity_percent = params_dict['plasticity_percent']
+        self.mov_mod_episode = params_dict['mov_modulation_drift_freq']
 
+        # Plasticity drfit parameters
+        self.plasticity_episode = params_dict['plasticity_drift_freq']
+        assert self.plasticity_episode >=2, "Maybe set plasticity drift more rarely?"
+        self.plasticity_percent = params_dict['plasticity_percent']
         self.reset_plasticity_episode = params_dict['reset_plasticity_episode']
         self.plasticity_process_count = 0
 
-        # Generate w0 drift process
+        # Generate plasticity drift process (w0)
         self.rng = np.random.default_rng(seed=params_dict['rand_seed'])
         self.w0_process = generate_perturbations(self.w0_without_locus,
                                                  M=self.reset_plasticity_episode * 2,
                                                  step_scale=self.plasticity_percent*0.01,)
     else:
         print('No temporal drift events!')
-        # --------------------------------------------
 
-    # Spatial parameters
+    ### Spatial parameters
     self.spatial_events = []
     self.spatial_var_freq = params_dict['spatial_var_freq']
     self.spatial_var_episode = self.spatial_var_freq
@@ -397,13 +395,14 @@ class SpatialKuramoto(gym.Env):
 
   def calc_naive_lfp(self, sig):
     """ 
+    Calculate true LFP of the population.
     sig: tensor of size [time x neurons] of phases in rad
     """
-    return np.mean(np.cos(sig), axis=1)  #TODO: think about inverse PRC
+    return np.mean(np.cos(sig), axis=1)
 
 
   def calc_distance_lfp(self, sig) -> list:
-    """ 
+    """
     sig: tensor of size [time x neurons] of phases in rad
     returns: vector of distance-accounted lfp-s from all recording electrodes
     """
@@ -414,10 +413,11 @@ class SpatialKuramoto(gym.Env):
 
 
   def step(self, action):
-    #---------------------------------------------------
-    # Square Wave DBS
+    """
+    Simple square Wave DBS. 
+    """
     self.u = [self.rescale_action(float(a)) for a in action] # amplitudes
-    # 1. DBS ON. I part
+    ### 1. DBS ON. I part
     pulse = np.zeros((self.params_dict['num_oscillators']))
     for amplitude, conductance in zip(self.u, self.kuramoto.dbs.conductances):
       pulse += conductance * amplitude
@@ -430,7 +430,7 @@ class SpatialKuramoto(gym.Env):
     self.sol_state_ = self.sol_state
     self.current_time = self.t_eval_step_I[-1]
 
-    # 2. DBS OFF. II part
+    ### 2. DBS OFF. II part
     self.kuramoto.pulse = np.zeros((self.params_dict['num_oscillators']))
     self.t_eval_step_II = np.arange(self.current_time,
                                     self.current_time + self.params_dict['electrode_pause'],
@@ -439,7 +439,8 @@ class SpatialKuramoto(gym.Env):
     self.sol_state = self.kuramoto.forward(self.t_eval_step_II, self.sol_state[-1, :])
     self.sol_state_ = np.concatenate([self.sol_state_ , self.sol_state])
     self.current_time = self.t_eval_step_II[-1]
-# ----------------------------------------------------------
+
+    # Calcualte observation 
     self.theta_mean = self.calc_naive_lfp(self.sol_state_[:-1, :])  # True LFP
     self.theta_records = self.calc_lfp(self.sol_state_[:-1, :])   # As we set in init
 
@@ -453,13 +454,7 @@ class SpatialKuramoto(gym.Env):
     return (self.theta_state.astype(np.float32), self.reward_, self.done, False, {})
 
 
-  def update_temporal_params(self,):
-      pass  # TODO ----
-  def update_spatial_params(self,):
-      pass  # TODO ---
-  
-  # ----------------------------------RESET------------------------------------
-  def calc_next_temp_event(self, f, deltas=[-1, 0, 1]):
+  def calc_next_event(self, f, deltas=[-1, 0, 1]):
     if self.random_freq_update:
         # Update new drift event time. Random event
         range_list = [f+f_delta for f_delta in deltas]
@@ -471,34 +466,29 @@ class SpatialKuramoto(gym.Env):
 
   def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):  
     """
-    Reset environment, and get a window 250 of self.len_state size
-    Returns: arrayed_version:np.array(1, len_state)
+    We update temporal and spatial features parameters during reset. 
     """
     super().reset(seed=seed)
 
     self.current_step = 0
     self.current_time = 0.
     self.done = False
-
     self.reset_count += 1  # +1 to reset counter
     self.states = []
     self.actions = []
-
     params_dict = self.params_dict
     self.theta_state = np.empty((1, self.observe_wind_idxs), dtype=np.float32)
 
-    # ==============TEMPORAL FEATURES=============================================
-    if params_dict['temporal_drift']: # and self.reset_count >= 2:
+    ### Temporal Features Update
+    if params_dict['temporal_drift']:
 
         if self.elec_drift_episode == self.reset_count:
-
-            self.elec_drift_episode += self.calc_next_temp_event(params_dict['electrode_drift_freq'],
-                                                                 [-1, 0, 1])
+            self.elec_drift_episode += self.calc_next_event(params_dict['electrode_drift_freq'],
+                                                            [-1, 0, 1])
             new_coords_ = [[10000, 0, 0]]
-            b1, b2 = 1, min(self.params_dict['grid_size'])-2  # Remove bound coords
-            
-            # Check out-of-bounds movement. NOTE: for now only 1 contact!
-            while any([coord < b1 or coord > b2 for coord in new_coords_[0]]):
+            bound1, bound2 = 1, min(self.params_dict['grid_size'])-2  # Remove bound coords
+            # Check out-of-bounds movement. TODO: Now it works for now only 1 contact!
+            while any([coord < bound1 or coord > bound2 for coord in new_coords_[0]]):
                 # Sample delta and update electrode coordinates
                 elec_delta = np.empty(3)
                 for i in range(3):
@@ -514,24 +504,19 @@ class SpatialKuramoto(gym.Env):
                 print(f'Electode drift! Changed electrode location to {self.elec_coords}')
 
         if self.elec_encaps_episode == self.reset_count:
-
-            self.elec_encaps_episode += self.calc_next_temp_event(
-                params_dict['encapsulation_drift_freq'],
-                [-2, -1, 0, 1, 2])
-
-            self.encapsulation_coeff += self.encaps_precent
+            self.elec_encaps_episode += self.calc_next_event(params_dict['encapsulation_drift_freq'],
+                                                             [-2, -1, 0, 1, 2])
+            self.encapsulation_coeff += self.encaps_precent  # We accumulate encapsulation with each step
 
             # Log and print
             if self.save_events:
                 self.temporal_events['encapsulation_drift'].append([self.reset_count, self.encaps_precent])
             if self.verbose:
-                print(f'Electode encapsulation! Reduced electrode conductances by {self.encaps_precent}')
+                print(f'Electode encapsulation! Reduced electrode conductances by {self.encapsulation_coeff}')
                 cond_ = self.kuramoto.dbs.conductances[0]
                 print(f'NOW DBS affects {np.argwhere(cond_ > 0.0).shape[0]} neurons, min={round(cond_.min(), 3)} & max={round(cond_.max(), 3)}')
 
-
         if self.plasticity_episode == self.reset_count:
-
             self.plasticity_episode += self.calc_next_temp_event(params_dict['plasticity_drift_freq'],
                                                                   [0, 1])
             self.w0_without_locus = self.w0_process[self.plasticity_process_count]
@@ -543,7 +528,7 @@ class SpatialKuramoto(gym.Env):
             if self.verbose:
                 print(f'Drift of w0 by {self.plasticity_percent}%, to {self.plasticity_process_count}')
 
-        # Reset plasticity stoch. process
+        # Reset plasticity and generate stoch. process anew
         if self.reset_count % self.reset_plasticity_episode == 0:
             if self.verbose:
                 print(f'Reseting plastisity...')
@@ -555,15 +540,14 @@ class SpatialKuramoto(gym.Env):
                                                      M=self.reset_plasticity_episode * 2,
                                                      step_scale=self.plasticity_percent*0.01,)
                 
-    # ======================SPATIAL FEATURES================================
-    # Vary location of coordinates of electrode
+    ### Spatial Features Update.
     if params_dict['spatial_feature']:
         if self.spatial_var_episode == self.reset_count and self.reset_count > 2:
-
+            # Vary location of coordinates of electrode
             index = np.random.choice(len(stim_rec_locus_coordinates))
             self.elec_coords = [stim_rec_locus_coordinates[index][0]]
             self.rec_coords = [stim_rec_locus_coordinates[index][1]]
-            # self.locus_coords = stim_rec_locus_coordinates[index][2]  # NOTE: removed
+            # self.locus_coords = stim_rec_locus_coordinates[index][2]  # TODO: fix
   
             self.spatial_var_episode += self.spatial_var_freq
 
@@ -571,19 +555,18 @@ class SpatialKuramoto(gym.Env):
             self.spatial_events.append([self.reset_count, stim_rec_locus_coordinates[index]])
             if self.verbose:
                 print('Reinit spatial parameters! New coordinates are: ', stim_rec_locus_coordinates[index])
-                print('-'*30)
 
     # Save all temporal and spatial features statistics
     if self.params_dict['save_events'] and self.params_dict['log_path'] is not None and self.reset_count > 1:
         log_name = os.path.join(self.params_dict['log_path'], f"temp_{self.reset_count}.npy")
         np.save(log_name, self.temporal_events)
-    # ======================
 
-    # Re-calculate w0
+
+    ### Re-calculate w0 with or without plasticity 
     self.w0 = apply_locus_mask(self.w0_without_locus,
                                params_dict['locus_without_w0'],
                                params_dict['locus_mask'],)
-    # Re-init model
+    ### Re-init model
     self.kuramoto = KuramotoJAX(
             n_neurons=            params_dict['num_oscillators'],
             K=                    params_dict['K'],
@@ -595,13 +578,13 @@ class SpatialKuramoto(gym.Env):
 
             spatial_kernel=       params_dict['spatial_kernel'],
             wavelet_amp=          params_dict['wavelet_amp'],
-            wavelet_steepness=    params_dict['wavelet_steepness'] ,
-            # DBS
+            wavelet_steepness=    params_dict['wavelet_steepness'],
+
+            # DBS params
             directed_stimulation= params_dict['directed_stimulation'],  # bool
             electrode_coords=     self.elec_coords,
             recorders_coords=     self.rec_coords,
             conduct_modifier=     self.encapsulation_coeff,  # the bigger, the less is DBS kernel
-            # conduct_modifier=     params_dict['conduct_modifier'],  # the bigger, the less is DBS kernel
 
             electrode_amps=       params_dict['electrode_amps'],
             electrode_prc_scaling=params_dict['electrode_prc_scaling'],
@@ -619,12 +602,12 @@ class SpatialKuramoto(gym.Env):
     self.kneur_grid = self.kuramoto.neur_grid
     self.kgrid_size = self.kuramoto.grid_size
 
+    ### Run transient state
     self.t_eval_transient = np.arange(self.current_time,
                                       self.transient_state_len,
                                       params_dict['verbose_dt'])   # [units]
     self.current_time = self.t_eval_transient[-1]   # [units]
     self.sol_state = self.kuramoto.forward(self.t_eval_transient, self.init_state)
-
     self.theta_record_transient = self.calc_lfp(self.sol_state[:-1, :])
     self.theta_state = self.theta_record_transient[-self.observe_wind_idxs:][np.newaxis, ...]
 
@@ -654,8 +637,7 @@ class SpatialKuramoto(gym.Env):
 
   def reward_bbpow_action(self, x_state, action_value, baseline=False):
     """
-    # 1
-    REWARD = - calc_beta_band_power (in window): float
+    #1 REWARD = - calc_beta_band_power (in window): float
     For this reward we need huge width of window or freq. leakege happens
     """
     assert len(x_state.shape) == 1, "Incorrect dimension of theta_state"
@@ -671,7 +653,7 @@ class SpatialKuramoto(gym.Env):
   def reward_temp_const_lfp_betafilt_action(self, x_state,
                                  action_value, baseline=False):
     """
-    #2
+    #2 as in Krylov et al., 2021 paper
     """
     assert len(x_state.shape) == 1, "Incorrect dimension of theta_state"
 
@@ -687,8 +669,7 @@ class SpatialKuramoto(gym.Env):
   def reward_bbpow_threth_action(self, x_state,
                                  action_value, baseline=False):
     """
-    #3
-    As in Gao paper. If bbpow higher than A, then reward=0.
+    #3 As in Gao paper. If bbpow higher than A, then reward=0.
     Else reward=1.
     """
     assert len(x_state.shape) == 1, "Incorrect dimension of theta_state"

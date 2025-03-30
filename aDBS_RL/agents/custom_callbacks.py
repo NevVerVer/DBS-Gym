@@ -2,8 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import pandas as pd 
-from neurokuramoto.utils import band_pass_envelope, units2sec, calc_envelope
-import gym 
+from environment.utils import band_pass_envelope, units2sec, calc_envelope
+import gymnasium
 import warnings
 from typing import Any, Callable, Optional, Union
 from scipy.signal import filtfilt
@@ -15,7 +15,6 @@ from stable_baselines3.common.vec_env import (
     DummyVecEnv, VecEnv, VecMonitor,
     is_vecenv_wrapped,
     sync_envs_normalization)
-import time
 
 
 class TensorboardCallback(BaseCallback):
@@ -47,7 +46,8 @@ class TensorboardCallback(BaseCallback):
         log_scale = True
         if log_scale:
             ax.semilogy(freq[:cut_idx], ft[:cut_idx], label='with DBS')
-            ax.semilogy(self.freq_R[:cut_idx], self.ft_R[:cut_idx], label='noDBS')
+            if os.path.isfile('data/reference_fileterd_lfp.npy'): 
+                ax.semilogy(self.freq_R[:cut_idx], self.ft_R[:cut_idx], label='noDBS')
             ax.set_ylim([10e-8, 10-2])
         else:
             ax.plot(freq[:cut_idx], ft[:cut_idx])
@@ -110,11 +110,12 @@ class TensorboardCallback(BaseCallback):
         self.step_len_sec = units2sec(self.training_env.get_attr('params_dict')[0]['electrode_width']) +\
                             units2sec(self.training_env.get_attr('params_dict')[0]['electrode_pause'])
         # for plotting
-        self.reference_lfp = np.load('data/reference_fileterd_lfp.npy')
-        sig_filt_R, _ = band_pass_envelope(self.reference_lfp, 1/self.psd_dt, order=2)
-        self.ft_R = np.abs(np.fft.rfft(sig_filt_R)/sig_filt_R.shape[0])**2 * 2
-        self.freq_R = np.fft.rfftfreq(sig_filt_R.shape[0], self.psd_dt)
-        self.ft_R = filtfilt([1,1,1,1,1,1,1,1,1,1,1,1,], 5, self.ft_R)
+        if os.path.isfile('data/reference_fileterd_lfp.npy'):
+            self.reference_lfp = np.load('data/reference_fileterd_lfp.npy')
+            sig_filt_R, _ = band_pass_envelope(self.reference_lfp, 1/self.psd_dt, order=2)
+            self.ft_R = np.abs(np.fft.rfft(sig_filt_R)/sig_filt_R.shape[0])**2 * 2
+            self.freq_R = np.fft.rfftfreq(sig_filt_R.shape[0], self.psd_dt)
+            self.ft_R = filtfilt([1,1,1,1,1,1,1,1,1,1,1,1,], 5, self.ft_R)
 
         # lists for logging 
         self.per_ep_reward = []
@@ -164,7 +165,7 @@ class TensorboardCallback(BaseCallback):
 
 def evaluate_policy_(
     model: "type_aliases.PolicyPredictor",
-    env: Union[gym.Env, VecEnv],
+    env: Union[gymnasium.Env, VecEnv],
     n_eval_episodes: int = 10,
     deterministic: bool = True,
     render: bool = False,
@@ -271,7 +272,7 @@ class EvalCallback_(EventCallback):
 
     def __init__(
         self,
-        eval_env: Union[gym.Env, VecEnv],
+        eval_env: Union[gymnasium.Env, VecEnv],
         callback_on_new_best: Optional[BaseCallback] = None,
         callback_after_eval: Optional[BaseCallback] = None,
         n_eval_episodes: int = 5,
@@ -304,11 +305,12 @@ class EvalCallback_(EventCallback):
         self.log_env_num = 0  # we will save actual signal only from 1 env
 
         # for plotting
-        self.reference_lfp = np.load('data/reference_fileterd_lfp.npy')
-        sig_filt_R, _ = band_pass_envelope(self.reference_lfp, 1/self.psd_dt, order=2)
-        self.ft_R = np.abs(np.fft.rfft(sig_filt_R)/sig_filt_R.shape[0])**2 * 2
-        self.freq_R = np.fft.rfftfreq(sig_filt_R.shape[0], self.psd_dt)
-        self.ft_R = filtfilt([1,1,1,1,1,1,1,1,1,1,1,1,], 5, self.ft_R)
+        if os.path.isfile('data/reference_fileterd_lfp.npy'):
+            self.reference_lfp = np.load('data/reference_fileterd_lfp.npy')
+            sig_filt_R, _ = band_pass_envelope(self.reference_lfp, 1/self.psd_dt, order=2)
+            self.ft_R = np.abs(np.fft.rfft(sig_filt_R)/sig_filt_R.shape[0])**2 * 2
+            self.freq_R = np.fft.rfftfreq(sig_filt_R.shape[0], self.psd_dt)
+            self.ft_R = filtfilt([1,1,1,1,1,1,1,1,1,1,1,1,], 5, self.ft_R)
 
         # Convert to VecEnv for consistency
         if not isinstance(eval_env, VecEnv):
@@ -379,8 +381,9 @@ class EvalCallback_(EventCallback):
             # Also calculate beta band power
             idx = np.where((freq > self.beta_a) & (freq < self.beta_b))
             bbpow_list.append(np.sum(ft[idx]))
-
-        ax.semilogy(self.freq_R[:cut_idx], self.ft_R[:cut_idx], label='noDBS')
+            
+        if os.path.isfile('data/reference_fileterd_lfp.npy'):
+            ax.semilogy(self.freq_R[:cut_idx], self.ft_R[:cut_idx], label='noDBS')
         ax.set_xlabel('Hz')
         ax.set_ylabel('Volt**2/hz')
         # beta ranges: low (13–20 Hz) and high (21–35 Hz)
@@ -543,7 +546,7 @@ class EvalCallback_(EventCallback):
 
 def evaluate_policy_hf_dbs(
     model,
-    env: Union[gym.Env, VecEnv],
+    env: Union[gymnasium.Env, VecEnv],
     n_envs,
     n_eval_episodes: int = 10,
     deterministic: bool = True,
