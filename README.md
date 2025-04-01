@@ -68,7 +68,7 @@ agent.learn(total_timesteps=2e6)
 
 </p>
 <p align="center">
-<em>How different rotational activity locates in Gyration Plane </em>
+<em>Example of how usual high-frequency DBS works in the environment. </em>
 </p>
 
 
