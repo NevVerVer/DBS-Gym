@@ -5,13 +5,6 @@
 # Neurophysiologically Realistic Environment for Adaptive Deep Brain Stimulation (aDBS)
 Code accompanying the research paper "Neurophysiologically Realistic Environment for Comparing Adaptive Deep Brain Stimulation Algorithms in Parkinson’s Disease" by Kuzmina E., Kriukov D., Lebedev M., Dylov. D, 2025, published in [???]()
 
-<p align="center">
-<img src="image/intro.png" alt>
-
-</p>
-<p align="center">
-<em>The brain areas that were explicitly studied with rotational dynamics approach in rhesus monkeys, humans and rodents. </em>
-</p>
 
 ## Description
 
@@ -20,6 +13,14 @@ This repository provides a neurophysiologically realistic environment for develo
 1. Bandwidth Features: Beta-band oscillations (12–35 Hz) and other frequency bands to model PD biomarkers.
 2. Spatial Features: Neuron-electrode interactions, partial observability, and directional stimulation.
 3. Temporal Features: Neural/electrode drift, beta bursting, and non-stationary dynamics.
+
+<p align="center">
+<img src="imgs/intro.png" alt>
+
+</p>
+<p align="center">
+<em>Pipeline for adaptive Deep Brain Stimulation. And features, introduced in our environment to create realistic neural activity. </em>
+</p>
 
 The environment is designed for both neuroscientists (to bridge modeling with ML) and ML engineers (to tackle neurobiological challenges).
 
@@ -61,6 +62,15 @@ env = SpatialKuramoto(params_dict=params_dict_train)
 agent = PPO("MlpPolicy", env, n_steps=2048)  
 agent.learn(total_timesteps=2e6)  
 ```
+
+<p align="center">
+<img src="imgs/dbs_example.gif" alt>
+
+</p>
+<p align="center">
+<em>How different rotational activity locates in Gyration Plane </em>
+</p>
+
 
 ### Environment Configurations
 - `env0`: Bandwidth features only (beta oscillations).
