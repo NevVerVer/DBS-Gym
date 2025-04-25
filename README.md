@@ -36,13 +36,13 @@ The environment is designed for both neuroscientists (to bridge modeling with ML
 
 1. Clone the repository:
 ```bash
-git clone [TODO]  
+git clone https://github.com/NevVerVer/DBS-Gym  
 
 ```
 
 2. Navigate to the repository directory:
 ```bash
-cd TODO
+cd DBS-Gym
 ```
 
 3. Install the required packages:
