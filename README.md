@@ -3,7 +3,7 @@
 ![made with love](https://img.shields.io/badge/made%20with%20%E2%9D%A4%EF%B8%8F-8A2BE2)
 
 # Neurophysiologically Realistic Environment for Adaptive Deep Brain Stimulation (aDBS)
-Code accompanying the research paper "Neurophysiologically Realistic Environment for Comparing Adaptive Deep Brain Stimulation Algorithms in Parkinson’s Disease" by Kuzmina E., Kriukov D., Lebedev M., Dylov. D, 2025, published in [???]()
+Code accompanying the research paper "Neurophysiologically Realistic Environment for Comparing Adaptive Deep Brain Stimulation Algorithms in Parkinson’s Disease" by Kuzmina E., Kriukov D., Lebedev M., Dylov. D, 2025, published on [KDD 2025 conference](https://dl.acm.org/doi/abs/10.1145/3711896.3737397)
 
 
 ## Description
@@ -106,20 +106,17 @@ The Kuramoto model is lightweight and modular — **ideal for rapid experimentat
 ## Citation
 If you use the code or the findings from our paper, **please cite**:
 
-<!-- *Kuzmina, E., Kriukov, D., & Lebedev, M.* (2024). Neuronal travelling waves explain rotational dynamics in experimental datasets and modelling. Scientific Reports, 14(1), 3566.(**doi**: https://doi.org/10.1038/s41598-024-53907-2)
+*Kuzmina, Ekaterina, et al. "Neurophysiologically Realistic Environment for Comparing Adaptive Deep Brain Stimulation Algorithms in Parkinson's Disease." Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2. 2025. (doi: ttps://doi.org/10.1145/3711896.3737397)
 
 ```bash
-@article{kuzmina2024neuronal,
-  title={Neuronal travelling waves explain rotational dynamics in experimental datasets and modelling},
-  author={Kuzmina, Ekaterina and Kriukov, Dmitrii and Lebedev, Mikhail},
-  journal={Scientific Reports},
-  volume={14},
-  number={1},
-  pages={3566},
-  year={2024},
-  publisher={Nature Publishing Group UK London}
+@inproceedings{kuzmina2025neurophysiologically,
+  title={Neurophysiologically Realistic Environment for Comparing Adaptive Deep Brain Stimulation Algorithms in Parkinson's Disease},
+  author={Kuzmina, Ekaterina and Kriukov, Dmitrii and Lebedev, Mikhail and Dylov, Dmitry V},
+  booktitle={Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2},
+  pages={5571--5582},
+  year={2025}
 }
-``` -->
+```
 
 
 ## Contact
