@@ -49,6 +49,10 @@ cd DBS-Gym
 ```bash
 pip install -r requirements.txt
 ```
+or, if you're using conda:
+```bash
+conda create --name dbs_gym --file requirements.txt
+```
 
 ### Basic Example
 ```bash
