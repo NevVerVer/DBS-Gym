@@ -1,5 +1,5 @@
 import numpy as np
-import gym
+import gymnasium as gym
 
 from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 from typing import Any, Callable, Optional, Union
@@ -9,11 +9,11 @@ from stable_baselines3.common.vec_env import (
     is_vecenv_wrapped,
     )
 # We import class and utils!
-from neurokuramoto.utils import generate_w0_with_locus, band_pass_envelope
-from neurokuramoto.model_v1 import SpatialKuramoto
+from environment.utils import generate_w0_with_locus, band_pass_envelope
+from environment.env import SpatialKuramoto
 
 # We import env version 
-from data.configs.env2 import (
+from environment.env_configs.env2 import (
     n_neurons, grid_size, coord_modif,
     eval_envs_list, checking
 )
